@@ -528,7 +528,8 @@ public class Sintatico {
     }
 
     private void mais_expr_logica() {
-        if (token.getClasse() == Classe.operadorOu) {
+        if (token.getClasse() == Classe.palavraReservada
+        && token.getValor().getValorTexto().equals("or")) {
             token = lexico.nextToken();
             termo_logico();
             mais_expr_logica();
@@ -541,7 +542,8 @@ public class Sintatico {
     }
 
     private void mais_termo_logico() {
-        if (token.getClasse() == Classe.operadorE) {
+        if (token.getClasse() == Classe.palavraReservada
+        && token.getValor().getValorTexto().equals("and")) {
             token = lexico.nextToken();
             fator_logico();
             mais_termo_logico();
@@ -549,7 +551,8 @@ public class Sintatico {
     }
 
     private void fator_logico() {
-        if (token.getClasse() == Classe.operadorNegacao) {
+        if (token.getClasse() == Classe.palavraReservada
+        && token.getValor().getValorTexto().equals("not")) {
             token = lexico.nextToken();
             fator_logico();
         } else {

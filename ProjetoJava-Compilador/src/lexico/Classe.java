@@ -15,9 +15,9 @@ public enum Classe {
     operadorDiferente, // <> f
     operadorMaiorIgual, // >= f 
     operadorIgual,  // = f 
-    operadorE,  // and
-    operadorOu,  // or
-    operadorNegacao,  // not
+    //operadorE,  // and
+    //operadorOu,  // or
+    //operadorNegacao,  // not
     atribuicao,  // := f
     pontoEVirgula,  // ; f
     virgula, // , f
