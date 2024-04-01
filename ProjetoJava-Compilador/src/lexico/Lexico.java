@@ -25,8 +25,7 @@ public class Lexico {
                     "of", "or", "packed", "procedure", "program",
                     "record", "repeat", "set", "then", "to",
                     "type", "until", "var", "while", "with",
-                    "integer", "real", "boolean", "char", "string",
-                    "write", "writeln", "read"));
+                    "integer", "real", "boolean", "char", "string", "write", "writeln", "read", "true", "false"));
 
     public Lexico(String nomeArquivo) {
         this.nomeArquivo = nomeArquivo;
@@ -203,7 +202,8 @@ public class Lexico {
                         linha++;
                         coluna = 1;
                     } else if (caractere == 65535) {
-                        System.err.println("Erro lexico...Comentário aberto, "+" linha: "+linha+" ,coluna: "+coluna);
+                        System.err.println(
+                                "Erro lexico...Comentário aberto, " + " linha: " + linha + " ,coluna: " + coluna);
                         System.exit(-1);
                     }
                 }
@@ -217,7 +217,8 @@ public class Lexico {
                     caractere = proximoChar();
                     coluna++;
                     if (caractere == '\n') {
-                        System.err.println("Erro lexico...String aberta, "+" linha: "+linha+" ,coluna: "+coluna);
+                        System.err
+                                .println("Erro lexico...String aberta, " + " linha: " + linha + " ,coluna: " + coluna);
                         System.exit(-1);
                     } else if (caractere == 65535) {
                         System.err.println("Erro lexico...String aberta - EOF");
