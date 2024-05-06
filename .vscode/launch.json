@@ -9,8 +9,20 @@
             "name": "Compilador",
             "request": "launch",
             "mainClass": "Compilador",
+            "projectName": "trabalho-01-compiladores - Sintatico - Gerador Codigo_273ab917",
+            "args": [
+                "programaPascal.pas"
+            ]
+        },
+        {
+            "type": "java",
+            "name": "Compilador",
+            "request": "launch",
+            "mainClass": "Compilador",
             "projectName": "trabalho-01-compiladores - Sintatico_7b821fdb",
-            "args": ["programaPascal.pas"]
+            "args": [
+                "programaPascal.pas"
+            ]
         },
         {
             "type": "java",

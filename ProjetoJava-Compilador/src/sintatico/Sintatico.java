@@ -1,5 +1,13 @@
 package sintatico;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+
 import lexico.Classe;
 import lexico.Lexico;
 import lexico.Token;
@@ -9,9 +17,34 @@ public class Sintatico {
     private Lexico lexico;
     private Token token;
 
+    private TabelaSimbolos tabela = new TabelaSimbolos();
+    private String rotulo = "";
+    private int contRotulo = 1;
+    private int offSetVariavel = 0;
+    private static final int TAMANHO_INTEIRO = 4;
+
+    private String nomeArquivoSaida;
+    private String caminhoArquivoSaida;
+    private BufferedWriter bw;
+    private FileWriter fw;
+
+    private List<String> variaveis = new ArrayList<String>();
+    private List<String> sectionData = new ArrayList<String>();
+
     public Sintatico(String nomeArquivo) {
         this.nomeArquivo = nomeArquivo;
         lexico = new Lexico(nomeArquivo);
+
+        nomeArquivoSaida = "queronemver.asm";
+        caminhoArquivoSaida = Paths.get(nomeArquivoSaida).toAbsolutePath().toString();
+        bw = null;
+        fw = null;
+        try {
+            fw = new FileWriter(caminhoArquivoSaida, Charset.forName("UTF-8"));
+            bw = new BufferedWriter(fw);
+        } catch (Exception e) {
+            System.err.println("Erro ao criar arquivo de saída");
+        }
     }
 
     public void analisar() {
@@ -21,6 +54,25 @@ public class Sintatico {
 
     }
 
+    private void escreverCodigo(String instrucoes) {
+        try {
+            if (rotulo.isEmpty()) {
+                bw.write(instrucoes + "\n");
+            } else {
+                bw.write(rotulo + ": " + instrucoes + "\n");
+                rotulo = "";
+            }
+        } catch (IOException e) {
+            System.err.println("Erro escrevendo no arquivo de saída");
+        }
+    }
+
+    private String criarRotulo(String texto) {
+        String retorno = "rotulo" + texto + contRotulo;
+        contRotulo++;
+        return retorno;
+    }
+
     // <programa> ::= program <id> {A01} ; <corpo> • {A45}
     public void programa() {
         if (token.getClasse() == Classe.palavraReservada
@@ -28,14 +80,46 @@ public class Sintatico {
             token = lexico.nextToken();
             // Sempre que reconhecr um novo terminar receba o proximo token
             if (token.getClasse() == Classe.identificador) {
-                token = lexico.nextToken();
                 // {A01}
+                Registro registro = tabela.add(token.getValor().getValorTexto());
+                // rotulo = criarRotulo("main");
+                offSetVariavel = 0;
+                registro.setCategoria(Categoria.PROGRAMAPRINCIPAL);
+
+                escreverCodigo("global main");
+                escreverCodigo("extern printf");
+                escreverCodigo("extern scanf\n");
+                escreverCodigo("section .text");
+
+                rotulo = "main";
+
+                escreverCodigo("\t      ; Entrada do Programa");
+                escreverCodigo("\tpush ebp");
+                escreverCodigo("\tmov ebp, esp");
+                System.out.println(tabela);
+
+                token = lexico.nextToken();
+
                 if (token.getClasse() == Classe.pontoEVirgula) {
                     token = lexico.nextToken();
                     corpo();
                     if (token.getClasse() == Classe.ponto) {
                         token = lexico.nextToken();
                         // {A45}
+                        escreverCodigo("\tleave");
+                        escreverCodigo("\tret");
+                        if (!sectionData.isEmpty()) {
+                            escreverCodigo("\nsection .data\n");
+                            for (String mensagem : sectionData) {
+                                escreverCodigo(mensagem);
+                            }
+                        }
+                        try {
+                            bw.close();
+                            fw.close();
+                        } catch (IOException e) {
+                            System.err.println("Erro ao fechar arquivo de saída");
+                        }
                     } else {
                         System.err.println(token.getLinha() + ", " + token.getColuna() +
                                 " - (.) Ponto final esperado no final do programa.");
@@ -95,6 +179,16 @@ public class Sintatico {
             token = lexico.nextToken();
             tipo_var();
             // {A02}
+
+            int tamanho = 0;
+            for (String var : variaveis) {
+                tabela.get(var).setTipo(Tipo.INTEGER);
+                tamanho += TAMANHO_INTEIRO;
+            }
+            escreverCodigo("\tsub esp, " + tamanho);
+            variaveis.clear();
+            System.out.println(tabela);
+
         } else {
             System.err.println(token.getLinha() + ", " + token.getColuna() +
                     " - (:) Dois pontos esperado depois das variaveis.");
@@ -123,8 +217,21 @@ public class Sintatico {
     // <variaveis> ::= <id> {A03} <mais_var>
     public void variaveis() {
         if (token.getClasse() == Classe.identificador) {
-            token = lexico.nextToken();
             // {A03}
+
+            String variavel = token.getValor().getValorTexto();
+            if (tabela.isPresent(variavel)) {
+                System.err.println("Variável " + variavel + " já foi declarada anteriormente.");
+            } else {
+                tabela.add(variavel);
+                tabela.get(variavel).setCategoria(Categoria.VARIAVEL);
+                tabela.get(variavel).setOffSet(offSetVariavel);
+                offSetVariavel += TAMANHO_INTEIRO;
+                variaveis.add(variavel);
+            }
+            System.out.println(tabela);
+
+            token = lexico.nextToken();
             mais_var();
         } else {
             System.err.println(token.getLinha() + ", " + token.getColuna() +
@@ -189,8 +296,30 @@ public class Sintatico {
     // <var_read> ::= <id> {A08} <mais_var_read>
     public void var_read() {
         if (token.getClasse() == Classe.identificador) {
-            token = lexico.nextToken();
             // {A08}
+
+            String variavel = token.getValor().getValorTexto();
+            if (!tabela.isPresent(variavel)) {
+                System.err.println("Variável " + variavel + " não foi declarada");
+                System.exit(-1);
+            } else {
+                Registro registro = tabela.get(variavel);
+                if (registro.getCategoria() != Categoria.VARIAVEL) {
+                    System.err.println("Identificador " + variavel + " não é uma variável");
+                    System.exit(-1);
+                } else {
+                    escreverCodigo("\tmov edx, ebp");
+                    escreverCodigo("\tlea eax, [edx - " + registro.getOffSet() + "]");
+                    escreverCodigo("\tpush eax");
+                    escreverCodigo("\tpush @Integer");
+                    escreverCodigo("\tcall scanf");
+                    escreverCodigo("\tadd esp, 8");
+                    if (!sectionData.contains("@Integer: db '%d',0")) {
+                        sectionData.add("@Integer: db '%d',0");
+                    }
+                }
+            }
+            token = lexico.nextToken();
             mais_var_read();
         } else {
             System.err.println(token.getLinha() + ", " + token.getColuna() +
@@ -218,21 +347,56 @@ public class Sintatico {
 
             // <id> {A09} <mais_exp_write>
             if (token.getClasse() == Classe.identificador) {
-                token = lexico.nextToken();
                 // {A09}
+
+                String variavel = token.getValor().getValorTexto();
+                if (!tabela.isPresent(variavel)) {
+                    System.err.println("Variável " + variavel + " não foi declarada");
+                    System.exit(-1);
+                } else {
+                    Registro registro = tabela.get(variavel);
+                    if (registro.getCategoria() != Categoria.VARIAVEL) {
+                        System.err.println("Identificador " + variavel + " não é uma variável");
+                        System.exit(-1);
+                    } else {
+                        escreverCodigo("\tpush dword[ebp - " + registro.getOffSet() + "]");
+                        escreverCodigo("\tpush @Integer");
+                        escreverCodigo("\tcall printf");
+                        escreverCodigo("\tadd esp, 8");
+                        if (!sectionData.contains("@Integer: db '%d',0")) {
+                            sectionData.add("@Integer: db '%d',0");
+                        }
+                    }
+                }
+                token = lexico.nextToken();
                 mais_exp_write();
             } else if (token.getClasse() == Classe.string) {
-                token = lexico.nextToken();
                 // {A59}
+                String string = token.getValor().getValorTexto();
+                String rotulo = criarRotulo("String");
+                sectionData.add(rotulo + ": db '" + string + "',0");
+                escreverCodigo("\tpush " + rotulo);
+                escreverCodigo("\tcall printf");
+                escreverCodigo("\tadd esp, 4");
+
+                token = lexico.nextToken();
                 mais_exp_write();
             } else if (token.getClasse() == Classe.numeroInteiro) {
-                token = lexico.nextToken();
                 // {A43}
+                int numero = token.getValor().getValorInteiro();
+                escreverCodigo("\tpush " + numero);
+                escreverCodigo("\tpush @Integer");
+                escreverCodigo("\tcall printf");
+                escreverCodigo("\tadd esp, 8");
+                if (!sectionData.contains("@Integer: db '%d',0")) {
+                    sectionData.add("@Integer: db '%d',0");
+                }
+                token = lexico.nextToken();
                 mais_exp_write();
             }
         } else {
             System.err.println(token.getLinha() + ", " + token.getColuna() +
-                    " - Identificador, ou string, ou numeroInteiro esperado ao ler a função exp_write()");
+                    " - Identificador/string,/numeroInteiro esperado ao ler a função exp_write()");
         }
     }
 
@@ -466,12 +630,17 @@ public class Sintatico {
                                                             } else {
                                                                 System.err.println(token.getLinha() + ","
                                                                         + token.getColuna()
-                                                                        + " Erro: era esperada a palavra reservada begin");
+                                                                        + " Erro: era esperada a palavra reservada begin ");
                                                             }
                                                         }
+                                                        // else {
+                                                        // System.err.println(token.getLinha() + ","
+                                                        // + token.getColuna()
+                                                        // + " Erro: era a Palavra Reserva Else após um If");
+                                                        // }
                                                     } else {
                                                         System.err.println(token.getLinha() + "," + token.getColuna()
-                                                                + " Erro: era esperada a palavra reservada end");
+                                                                + " Erro: era a Palavra Reserva end");
                                                     }
                                                 } else {
                                                     System.err.println(token.getLinha() + "," + token.getColuna()
@@ -506,6 +675,7 @@ public class Sintatico {
         }
     }
 
+    // <pfalsa> ::= else {A25} begin <sentencas> end | ε
     private void pfalsa() {
         if (token.getClasse() == Classe.palavraReservada
                 && token.getValor().getValorTexto().equals("else")) {
@@ -522,28 +692,32 @@ public class Sintatico {
         }
     }
 
+    // <expressao_logica> ::= <termo_logico> <mais_expr_logica>
     private void expressao_logica() {
         termo_logico();
         mais_expr_logica();
     }
 
+    // <mais_expr_logica> ::= or <termo_logico> <mais_expr_logica> {A26} | ε
     private void mais_expr_logica() {
         if (token.getClasse() == Classe.palavraReservada
-        && token.getValor().getValorTexto().equals("or")) {
+                && token.getValor().getValorTexto().equals("or")) {
             token = lexico.nextToken();
             termo_logico();
             mais_expr_logica();
         }
     }
 
+    // <termo_logico> ::= <fator_logico> <mais_termo_logico>
     private void termo_logico() {
         fator_logico();
         mais_termo_logico();
     }
 
+    // <mais_termo_logico> ::= and <fator_logico> <mais_termo_logico> {A27} | ε
     private void mais_termo_logico() {
         if (token.getClasse() == Classe.palavraReservada
-        && token.getValor().getValorTexto().equals("and")) {
+                && token.getValor().getValorTexto().equals("and")) {
             token = lexico.nextToken();
             fator_logico();
             mais_termo_logico();
@@ -552,7 +726,7 @@ public class Sintatico {
 
     private void fator_logico() {
         if (token.getClasse() == Classe.palavraReservada
-        && token.getValor().getValorTexto().equals("not")) {
+                && token.getValor().getValorTexto().equals("not")) {
             token = lexico.nextToken();
             fator_logico();
         } else {
@@ -594,11 +768,14 @@ public class Sintatico {
         }
     }
 
+    // <expressao> ::= <termo> <mais_expressao>
     private void expressao() {
         termo();
         mais_expressao();
     }
 
+    // <mais_expressao> ::= + <termo> <mais_expressao> {A37} |
+    // - <termo> <mais_expressao> {A38} | ε
     private void mais_expressao() {
         if (token.getClasse() == Classe.operadorSoma
                 || token.getClasse() == Classe.operadorSubtracao) {
@@ -608,11 +785,14 @@ public class Sintatico {
         }
     }
 
+    // <termo> ::= <fator> <mais_termo>
     private void termo() {
         fator();
         mais_termo();
     }
 
+    // <mais_termo> ::= * <fator> <mais_termo> {A39} | / <fator> <mais_termo> {A40}
+    // | ε
     private void mais_termo() {
         if (token.getClasse() == Classe.operadorMultiplicacao
                 || token.getClasse() == Classe.operadorDivisao) {
@@ -622,6 +802,7 @@ public class Sintatico {
         }
     }
 
+    // <fator> ::= <id> {A55} | <intnum> {A41} | ( <expressao> )
     private void fator() {
         if (token.getClasse() == Classe.identificador) {
             token = lexico.nextToken();
