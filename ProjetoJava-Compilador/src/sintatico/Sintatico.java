@@ -31,6 +31,8 @@ public class Sintatico {
     private List<String> variaveis = new ArrayList<String>();
     private List<String> sectionData = new ArrayList<String>();
 
+    private Registro registro;
+
     public Sintatico(String nomeArquivo) {
         this.nomeArquivo = nomeArquivo;
         lexico = new Lexico(nomeArquivo);
@@ -348,7 +350,6 @@ public class Sintatico {
             // <id> {A09} <mais_exp_write>
             if (token.getClasse() == Classe.identificador) {
                 // {A09}
-
                 String variavel = token.getValor().getValorTexto();
                 if (!tabela.isPresent(variavel)) {
                     System.err.println("Variável " + variavel + " não foi declarada");
@@ -455,8 +456,16 @@ public class Sintatico {
                         token = lexico.nextToken();
                         exp_write();
                         if (token.getClasse() == Classe.parentesesDireito) {
+                            // {61}
+                            // WriteLn
+                            String novaLinha = "rotuloStringLn: db '',10,0";
+                            if (!sectionData.contains(novaLinha)) {
+                                sectionData.add(novaLinha);
+                            }
+                            escreverCodigo("\tpush rotuloStringLn");
+                            escreverCodigo("\tcall printf");
+                            escreverCodigo("\tadd esp, 4");
                             token = lexico.nextToken();
-                            // {A07}
                         } else {
                             System.err.println(token.getLinha() + "," + token.getColuna()
                                     + " Erro: era esperado um parênteses direito após a lista de expressões");
@@ -465,207 +474,247 @@ public class Sintatico {
                         System.err.println(token.getLinha() + "," + token.getColuna()
                                 + " Erro: era esperado um sinal de atribuição após o identificador");
                     }
-                } else {
-                    if (token.getClasse() == Classe.palavraReservada
-                            && token.getValor().getValorTexto().equals("for")) {
+                } else if (token.getClasse() == Classe.palavraReservada &&
+                        token.getValor().getValorTexto().equals("for")) {
+                    token = lexico.nextToken();
+                    if (token.getClasse() == Classe.identificador) {
+                        // {A57}
+                        // Verificar se o identificador id está na tabela de símbolos corrente ou nas
+                        // apontadas por tabelaPai. Caso não esteja, emitir mensagem apropriada dizendo
+                        // que o mesmo ainda não foi declarado.
+                        // Caso contrário, verificar se sua categoria é variável, parâmetro ou é a
+                        // função corrente. Caso não seja, emitir mensagem indicando que o identificador
+                        // não é uma variável.
+                        String variavel = token.getValor().getValorTexto();
+                        if (!tabela.isPresent(variavel)) {
+                            System.err.println("Variável " + variavel + " não foi declarada");
+                            System.exit(-1);
+                        } else {
+                            registro = tabela.get(variavel);
+                            if (registro.getCategoria() != Categoria.VARIAVEL) {
+                                System.err.println("O identificador " + variavel + "não é uma variável. A57");
+                                System.exit(-1);
+                            }
+                        }
                         token = lexico.nextToken();
-                        if (token.getClasse() == Classe.identificador) {
+                        if (token.getClasse() == Classe.atribuicao) {
                             token = lexico.nextToken();
-                            if (token.getClasse() == Classe.atribuicao) {
+                            expressao();
+                            // {A11}
+                            // ▪ Desempilhar o resultado da avaliação da <expressao> e armazená-lo no
+                            // endereço de memória de id. (Lembre-se, o endereço de memória é calculado em
+                            // função da base da pilha (EBP) e do deslocamento contido em display.)
+                            escreverCodigo("\tpop dword[ebp - " + registro.getOffSet() + "]");
+                            // ▪ Criar um novo rótulo para a entrada do laço (digamos que este rótulo seja
+                            // denominado por rotuloFor)
+                            String rotuloEntrada = criarRotulo("FOR");
+                            // ▪ Criar um novo rótulo para a saída do laço (digamos que este rótulo seja
+                            // denominado por rotuloFim)
+                            String rotuloSaida = criarRotulo("FIMFOR");
+                            // ▪ Gerar o rotulo rotuloFor.
+                            rotulo = rotuloEntrada;
+                            if (token.getClasse() == Classe.palavraReservada &&
+                                    token.getValor().getValorTexto().equals("to")) {
                                 token = lexico.nextToken();
-                                if (token.getClasse() == Classe.numeroInteiro) {
+                                expressao();
+                                // {A12}
+                                // Gerar um desvio para rotuloFim se o valor armazenado no endereço de memória
+                                // de id é maior que o resultado da avaliação de expressao (lembre-se, o
+                                // resultado de expressao está no topo da pilha). Não se esqueça, o endereço de
+                                // memória de id é calculado em função da base da pilha (EBP) e do deslocamento
+                                // contido em display.
+                                escreverCodigo("\tpush ecx\n"
+                                        + "\tmov ecx, dword[ebp - " + registro.getOffSet() + "]\n"
+                                        + "\tcmp ecx, dword[esp+4]\n" // +4 por causa do ecx
+                                        + "\tjg " + rotuloSaida + "\n"
+                                        + "\tpop ecx");
+                                if (token.getClasse() == Classe.palavraReservada &&
+                                        token.getValor().getValorTexto().equals("do")) {
                                     token = lexico.nextToken();
-                                    if (token.getClasse() == Classe.palavraReservada
-                                            && token.getValor().getValorTexto().equals("to")) {
+                                    if (token.getClasse() == Classe.palavraReservada &&
+                                            token.getValor().getValorTexto().equals("begin")) {
                                         token = lexico.nextToken();
-                                        if (token.getClasse() == Classe.numeroInteiro) {
+                                        sentencas();
+                                        if (token.getClasse() == Classe.palavraReservada &&
+                                                token.getValor().getValorTexto().equals("end")) {
                                             token = lexico.nextToken();
-                                            if (token.getClasse() == Classe.palavraReservada
-                                                    && token.getValor().getValorTexto().equals("do")) {
-                                                token = lexico.nextToken();
-                                                if (token.getClasse() == Classe.palavraReservada
-                                                        && token.getValor().getValorTexto().equals("begin")) {
-                                                    token = lexico.nextToken();
-                                                    sentencas();
-                                                    if (token.getClasse() == Classe.palavraReservada
-                                                            && token.getValor().getValorTexto().equals("end")) {
-                                                        token = lexico.nextToken();
-                                                    } else {
-                                                        System.err.println(token.getLinha() + "," + token.getColuna()
-                                                                + " Erro: era esperada a palavra reservada end");
-                                                    }
-                                                } else {
-                                                    System.err.println(token.getLinha() + "," + token.getColuna()
-                                                            + " Erro: era esperada a palavra reservada begin");
-                                                }
-                                            } else {
-                                                System.err.println(token.getLinha() + "," + token.getColuna()
-                                                        + " Erro: era esperada a palavra reservada do");
-                                            }
+                                            // {A13}
+                                            // Gerar as instruções para incrementar a variável id.
+                                            escreverCodigo("\tadd dword[ebp - " + registro.getOffSet() + "], 1");
+                                            // Gerar um desvio para rotuloFor.
+                                            escreverCodigo("\tjmp " + rotuloEntrada);
+                                            // Gerar o rótulo rotuloFim.
+                                            rotulo = rotuloSaida;
                                         } else {
-                                            System.err.println(token.getLinha() + "," + token.getColuna()
-                                                    + " Erro: era esperado um número inteiro");
+                                            System.err.println(token.getLinha() + ", " + token.getColuna() +
+                                                    " - end esperado no for (comando).");
                                         }
                                     } else {
-                                        System.err.println(token.getLinha() + "," + token.getColuna()
-                                                + " Erro: era esperada a palavra reservada to");
+                                        System.err.println(token.getLinha() + ", " + token.getColuna() +
+                                                " - begin esperado no for (comando).");
                                     }
                                 } else {
-                                    System.err.println(token.getLinha() + "," + token.getColuna()
-                                            + " Erro: era esperado um número inteiro");
+                                    System.err.println(token.getLinha() + ", " + token.getColuna() +
+                                            " - do esperado no for (comando).");
                                 }
                             } else {
+                                System.err.println(token.getLinha() + ", " + token.getColuna() +
+                                        " - to esperado no for (comando).");
+                            }
+                        } else {
+                            System.err.println(token.getLinha() + ", " + token.getColuna() +
+                                    " - (:=) atribuição esperada no for (comando).");
+                        }
+                    } else {
+                        System.err.println(token.getLinha() + ", " + token.getColuna() +
+                                " - identificador esperado no for (comando).");
+                    }
+                    // repeat {A14} <sentencas> until ( <expressao_logica> ) {A15} |
+                } else if (token.getClasse() == Classe.palavraReservada &&
+                        token.getValor().getValorTexto().equals("Repeat")) {
+                    String rotRepeat = criarRotulo("Repeat");
+                    rotulo = rotRepeat;
+                    token = lexico.nextToken();
+                    sentencas();
+                    if (token.getClasse() == Classe.palavraReservada &&
+                            token.getValor().getValorTexto().equals("until")) {
+                        token = lexico.nextToken();
+                        if (token.getClasse() == Classe.parentesesEsquerdo) {
+                            token = lexico.nextToken();
+                            expressao_logica();
+                            if (token.getClasse() == Classe.parentesesDireito) {
+                                token = lexico.nextToken();
+                                // A15
+                                escreverCodigo("\tcmp dword[esp], 0\n");
+                                escreverCodigo("\tje" + rotRepeat);
+                            } else {
                                 System.err.println(token.getLinha() + "," + token.getColuna()
-                                        + " Erro: era esperado um sinal de atribuição");
+                                        + " Erro: era esperado um parênteses direito");
                             }
                         } else {
                             System.err.println(token.getLinha() + "," + token.getColuna()
-                                    + " Erro: era esperado um identificador");
+                                    + " Erro: era esperado um parênteses esquerdo");
                         }
                     } else {
-                        if (token.getClasse() == Classe.palavraReservada
-                                && token.getValor().getValorTexto().equals("repeat")) {
+                        System.err.println(token.getLinha() + "," + token.getColuna()
+                                + " Erro: era esperada a palavra reservada until");
+                    }
+                } else {
+                    if (token.getClasse() == Classe.palavraReservada
+                            && token.getValor().getValorTexto().equals("while")) {
+                        token = lexico.nextToken();
+                        // {A10}
+                        if (token.getClasse() == Classe.parentesesEsquerdo) {
                             token = lexico.nextToken();
-                            sentencas();
-                            if (token.getClasse() == Classe.palavraReservada
-                                    && token.getValor().getValorTexto().equals("until")) {
+                            expressao_logica();
+                            if (token.getClasse() == Classe.parentesesDireito) {
                                 token = lexico.nextToken();
-                                // {A09}
-                                if (token.getClasse() == Classe.parentesesEsquerdo) {
+                                if (token.getClasse() == Classe.palavraReservada
+                                        && token.getValor().getValorTexto().equals("do")) {
                                     token = lexico.nextToken();
-                                    expressao_logica();
-                                    if (token.getClasse() == Classe.parentesesDireito) {
+                                    if (token.getClasse() == Classe.palavraReservada
+                                            && token.getValor().getValorTexto().equals("begin")) {
                                         token = lexico.nextToken();
+                                        sentencas();
+                                        if (token.getClasse() == Classe.palavraReservada
+                                                && token.getValor().getValorTexto().equals("end")) {
+                                            token = lexico.nextToken();
+                                        } else {
+                                            System.err.println(token.getLinha() + "," + token.getColuna()
+                                                    + " Erro: era esperada a palavra reservada end");
+                                        }
                                     } else {
                                         System.err.println(token.getLinha() + "," + token.getColuna()
-                                                + " Erro: era esperado um parênteses esquerdo");
+                                                + " Erro: era esperada a palavra reservada begin");
                                     }
                                 } else {
                                     System.err.println(token.getLinha() + "," + token.getColuna()
-                                            + " Erro: era esperado um parênteses direito");
+                                            + " Erro: era esperada a palavra reservada do");
                                 }
                             } else {
                                 System.err.println(token.getLinha() + "," + token.getColuna()
-                                        + " Erro: era esperada a palavra reservada until");
+                                        + " Erro: era esperado um parênteses direito");
                             }
                         } else {
-                            if (token.getClasse() == Classe.palavraReservada
-                                    && token.getValor().getValorTexto().equals("while")) {
+                            System.err.println(token.getLinha() + "," + token.getColuna()
+                                    + " Erro: era esperado um parênteses esquerdo");
+                        }
+                    } else {
+                        if (token.getClasse() == Classe.palavraReservada
+                                && token.getValor().getValorTexto().equals("if")) {
+                            token = lexico.nextToken();
+                            // {A11}
+                            if (token.getClasse() == Classe.parentesesEsquerdo) {
                                 token = lexico.nextToken();
-                                // {A10}
-                                if (token.getClasse() == Classe.parentesesEsquerdo) {
+                                expressao_logica();
+                                if (token.getClasse() == Classe.parentesesDireito) {
                                     token = lexico.nextToken();
-                                    expressao_logica();
-                                    if (token.getClasse() == Classe.parentesesDireito) {
+                                    if (token.getClasse() == Classe.palavraReservada
+                                            && token.getValor().getValorTexto().equals("then")) {
                                         token = lexico.nextToken();
                                         if (token.getClasse() == Classe.palavraReservada
-                                                && token.getValor().getValorTexto().equals("do")) {
+                                                && token.getValor().getValorTexto().equals("begin")) {
                                             token = lexico.nextToken();
+                                            sentencas();
                                             if (token.getClasse() == Classe.palavraReservada
-                                                    && token.getValor().getValorTexto().equals("begin")) {
+                                                    && token.getValor().getValorTexto().equals("end")) {
                                                 token = lexico.nextToken();
-                                                sentencas();
+                                                pfalsa();
+                                                // {A12}
                                                 if (token.getClasse() == Classe.palavraReservada
-                                                        && token.getValor().getValorTexto().equals("end")) {
+                                                        && token.getValor().getValorTexto().equals("else")) {
                                                     token = lexico.nextToken();
-                                                } else {
-                                                    System.err.println(token.getLinha() + "," + token.getColuna()
-                                                            + " Erro: era esperada a palavra reservada end");
+                                                    if (token.getClasse() == Classe.palavraReservada
+                                                            && token.getValor().getValorTexto()
+                                                                    .equals("begin")) {
+                                                        token = lexico.nextToken();
+                                                        sentencas();
+                                                        if (token.getClasse() == Classe.palavraReservada
+                                                                && token.getValor().getValorTexto()
+                                                                        .equals("end")) {
+                                                            token = lexico.nextToken();
+                                                        } else {
+                                                            System.err.println(token.getLinha() + ","
+                                                                    + token.getColuna()
+                                                                    + " Erro: era esperada a palavra reservada end");
+                                                        }
+                                                    } else {
+                                                        System.err.println(token.getLinha() + ","
+                                                                + token.getColuna()
+                                                                + " Erro: era esperada a palavra reservada begin ");
+                                                    }
                                                 }
+                                                // else {
+                                                // System.err.println(token.getLinha() + ","
+                                                // + token.getColuna()
+                                                // + " Erro: era a Palavra Reserva Else após um If");
+                                                // }
                                             } else {
                                                 System.err.println(token.getLinha() + "," + token.getColuna()
-                                                        + " Erro: era esperada a palavra reservada begin");
+                                                        + " Erro: era a Palavra Reserva end");
                                             }
                                         } else {
                                             System.err.println(token.getLinha() + "," + token.getColuna()
-                                                    + " Erro: era esperada a palavra reservada do");
+                                                    + " Erro: era esperada a palavra reservada begin");
                                         }
                                     } else {
                                         System.err.println(token.getLinha() + "," + token.getColuna()
-                                                + " Erro: era esperado um parênteses direito");
+                                                + " Erro: era esperada a palavra reservada then");
                                     }
+                                } else {
+                                    System.err.println(token.getLinha() + "," + token.getColuna());
+                                }
+                            }
+                        } else {
+                            if (token.getClasse() == Classe.identificador) {
+                                token = lexico.nextToken();
+                                // {A13}
+                                if (token.getClasse() == Classe.atribuicao) {
+                                    token = lexico.nextToken();
+                                    expressao();
                                 } else {
                                     System.err.println(token.getLinha() + "," + token.getColuna()
-                                            + " Erro: era esperado um parênteses esquerdo");
-                                }
-                            } else {
-                                if (token.getClasse() == Classe.palavraReservada
-                                        && token.getValor().getValorTexto().equals("if")) {
-                                    token = lexico.nextToken();
-                                    // {A11}
-                                    if (token.getClasse() == Classe.parentesesEsquerdo) {
-                                        token = lexico.nextToken();
-                                        expressao_logica();
-                                        if (token.getClasse() == Classe.parentesesDireito) {
-                                            token = lexico.nextToken();
-                                            if (token.getClasse() == Classe.palavraReservada
-                                                    && token.getValor().getValorTexto().equals("then")) {
-                                                token = lexico.nextToken();
-                                                if (token.getClasse() == Classe.palavraReservada
-                                                        && token.getValor().getValorTexto().equals("begin")) {
-                                                    token = lexico.nextToken();
-                                                    sentencas();
-                                                    if (token.getClasse() == Classe.palavraReservada
-                                                            && token.getValor().getValorTexto().equals("end")) {
-                                                        token = lexico.nextToken();
-                                                        pfalsa();
-                                                        // {A12}
-                                                        if (token.getClasse() == Classe.palavraReservada
-                                                                && token.getValor().getValorTexto().equals("else")) {
-                                                            token = lexico.nextToken();
-                                                            if (token.getClasse() == Classe.palavraReservada
-                                                                    && token.getValor().getValorTexto()
-                                                                            .equals("begin")) {
-                                                                token = lexico.nextToken();
-                                                                sentencas();
-                                                                if (token.getClasse() == Classe.palavraReservada
-                                                                        && token.getValor().getValorTexto()
-                                                                                .equals("end")) {
-                                                                    token = lexico.nextToken();
-                                                                } else {
-                                                                    System.err.println(token.getLinha() + ","
-                                                                            + token.getColuna()
-                                                                            + " Erro: era esperada a palavra reservada end");
-                                                                }
-                                                            } else {
-                                                                System.err.println(token.getLinha() + ","
-                                                                        + token.getColuna()
-                                                                        + " Erro: era esperada a palavra reservada begin ");
-                                                            }
-                                                        }
-                                                        // else {
-                                                        // System.err.println(token.getLinha() + ","
-                                                        // + token.getColuna()
-                                                        // + " Erro: era a Palavra Reserva Else após um If");
-                                                        // }
-                                                    } else {
-                                                        System.err.println(token.getLinha() + "," + token.getColuna()
-                                                                + " Erro: era a Palavra Reserva end");
-                                                    }
-                                                } else {
-                                                    System.err.println(token.getLinha() + "," + token.getColuna()
-                                                            + " Erro: era esperada a palavra reservada begin");
-                                                }
-                                            } else {
-                                                System.err.println(token.getLinha() + "," + token.getColuna()
-                                                        + " Erro: era esperada a palavra reservada then");
-                                            }
-                                        } else {
-                                            System.err.println(token.getLinha() + "," + token.getColuna());
-                                        }
-                                    }
-                                } else {
-                                    if (token.getClasse() == Classe.identificador) {
-                                        token = lexico.nextToken();
-                                        // {A13}
-                                        if (token.getClasse() == Classe.atribuicao) {
-                                            token = lexico.nextToken();
-                                            expressao();
-                                        } else {
-                                            System.err.println(token.getLinha() + "," + token.getColuna()
-                                                    + " Erro: era esperado um sinal de atribuição");
-                                        }
-                                    }
+                                            + " Erro: era esperado um sinal de atribuição");
                                 }
                             }
                         }
@@ -705,6 +754,32 @@ public class Sintatico {
             token = lexico.nextToken();
             termo_logico();
             mais_expr_logica();
+            // {A26}
+            // Empilhar 1, caso o valor de expressao_logica ou termo_logico seja 1, e 0
+            // (falso), caso seja diferente. Isto pode ser feito da seguinte forma:
+            // Crie um novo rótulo, digamos rotSaida
+            String rotSaida = criarRotulo("SaidaMEL");
+            // Crie um novo rótulo, digamos rotVerdade
+            String rotVerdade = criarRotulo("VerdadeMEL");
+            // Gere a instrução: cmp dword [ESP + 4], 1
+            escreverCodigo("\tcmp dword [ESP + 4], 1");
+            // Gere a instrução je para rotVerdade
+            escreverCodigo("\tje " + rotVerdade);
+            // Gere a instrução: cmp dword [ESP], 1
+            escreverCodigo("\tcmp dword [ESP], 1");
+            // Gere a instrução je para rotVerdade
+            escreverCodigo("\tje " + rotVerdade);
+            // Gere a instrução: mov dword [ESP + 4], 0
+            escreverCodigo("\tmov dword [ESP + 4], 0");
+            // Gere a instrução jmp para rotSaida
+            escreverCodigo("\tjmp " + rotSaida);
+            // Gere o rótulo rotVerdade
+            rotulo = rotVerdade;
+            // Gere a instrução: mov dword [ESP + 4], 1
+            escreverCodigo("\tmov dword [ESP + 4], 1");
+            // Gere o rótulo rotSaida
+            rotulo = rotSaida;
+            // Gere a instrução: add esp, 4
         }
     }
 
@@ -806,8 +881,11 @@ public class Sintatico {
     private void fator() {
         if (token.getClasse() == Classe.identificador) {
             token = lexico.nextToken();
+            // {A55}
         } else {
             if (token.getClasse() == Classe.numeroInteiro) {
+                // {A41}
+                escreverCodigo("\tpush " + token.getValor().getValorInteiro());
                 token = lexico.nextToken();
             } else {
                 if (token.getClasse() == Classe.parentesesEsquerdo) {
