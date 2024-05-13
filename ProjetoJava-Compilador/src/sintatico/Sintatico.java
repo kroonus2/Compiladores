@@ -571,8 +571,8 @@ public class Sintatico {
                     }
                     // repeat {A14} <sentencas> until ( <expressao_logica> ) {A15} |
                 } else if (token.getClasse() == Classe.palavraReservada &&
-                        token.getValor().getValorTexto().equals("Repeat")) {
-                    String rotRepeat = criarRotulo("Repeat");
+                        token.getValor().getValorTexto().equals("repeat")) {
+                    String rotRepeat = criarRotulo("repeat");
                     rotulo = rotRepeat;
                     token = lexico.nextToken();
                     sentencas();
@@ -586,7 +586,7 @@ public class Sintatico {
                                 token = lexico.nextToken();
                                 // A15
                                 escreverCodigo("\tcmp dword[esp], 0\n");
-                                escreverCodigo("\tje" + rotRepeat);
+                                escreverCodigo("\tje " + rotRepeat);
                             } else {
                                 System.err.println(token.getLinha() + "," + token.getColuna()
                                         + " Erro: era esperado um parênteses direito");
@@ -754,7 +754,6 @@ public class Sintatico {
             token = lexico.nextToken();
             termo_logico();
             mais_expr_logica();
-            // {A26}
             // Empilhar 1, caso o valor de expressao_logica ou termo_logico seja 1, e 0
             // (falso), caso seja diferente. Isto pode ser feito da seguinte forma:
             // Crie um novo rótulo, digamos rotSaida
@@ -780,6 +779,8 @@ public class Sintatico {
             // Gere o rótulo rotSaida
             rotulo = rotSaida;
             // Gere a instrução: add esp, 4
+            escreverCodigo("\tadd esp, 4");
+
         }
     }
 
@@ -806,26 +807,29 @@ public class Sintatico {
             // Gere a instrução: cmp dword [ESP + 4], 1
             escreverCodigo("\tcmp dword [ESP + 4], 1");
             escreverCodigo("\tjne " + rotFalso);
-            escreverCodigo("\tcmp dword [ESP + 4], dword [ESP]");
+            // Comparar os 2 valores
+
+            // Gere a instrução: pop eax
+            escreverCodigo("\tpop eax");
+            // Gere a instrução: cmp dword [ESP], eax
+            escreverCodigo("\tcmp dword [ESP], eax");
             // Gere a instrução je para rotVerdade
             escreverCodigo("\tjne " + rotFalso);
             // Gere a instrução: mov dword [ESP + 4], 1
-            escreverCodigo("\tmov dword [ESP + 4], 1");
+            escreverCodigo("\tmov dword [ESP], 1");
             // Gere a instrução jmp para rotSaida
             escreverCodigo("\tjmp " + rotSaida);
             // Gere o rótulo rotFalso
             rotulo = rotFalso;
-            // Gere a instrução: mov dword [ESP + 4], 0
-            escreverCodigo("\tmov dword [ESP + 4], 0");
+            // Gere a instrução: mov dword [ESP], 0
+            escreverCodigo("\tmov dword [ESP], 0");
             // Gere o rótulo rotSaida
             rotulo = rotSaida;
             // Gere a instrução: add esp, 4
-            escreverCodigo("\tadd esp, 4");
-
+            // escreverCodigo("\tadd esp, 4");
         }
     }
 
-    // {A28}
     // <fator_logico> ::= <relacional> |
     // ( <expressao_logica> ) |
     // not <fator_logico> {A28} |
@@ -841,8 +845,7 @@ public class Sintatico {
                 System.err.println(token.getLinha() + ", " + token.getColuna() +
                         " - ()) parênteses direito esperado (fator_logico).");
             }
-        } else if (token.getClasse() == Classe.palavraReservada
-                && token.getValor().getValorTexto().equals("not")) {
+        } else if (token.getValor().getValorTexto().equals("not")) {
             token = lexico.nextToken();
             fator_logico();
             // {A28}
@@ -865,14 +868,12 @@ public class Sintatico {
             escreverCodigo("\tmov dword [ESP], 1");
             // Gere o rótulo Fim
             rotulo = rotSaida;
-        } else if (token.getClasse() == Classe.palavraReservada
-                && token.getValor().getValorTexto().equals("true")) {
+        } else if (token.getValor().getValorTexto().equals("true")) {
             token = lexico.nextToken();
             // {A29}
             // Empilhar 1.
             escreverCodigo("\tpush 1");
-        } else if (token.getClasse() == Classe.palavraReservada
-                && token.getValor().getValorTexto().equals("false")) {
+        } else if (token.getValor().getValorTexto().equals("false")) {
             token = lexico.nextToken();
             // {A30}
             // Empilhar 0.
@@ -1058,18 +1059,16 @@ public class Sintatico {
     // <mais_expressao> ::= + <termo> <mais_expressao> {A37} |
     // - <termo> <mais_expressao> {A38} | ε
     private void mais_expressao() {
-        if (token.getClasse() == Classe.operadorSoma){
+        if (token.getClasse() == Classe.operadorSoma) {
             token = lexico.nextToken();
             termo();
             mais_expressao();
-            //{A37}
             escreverCodigo("\tpop eax");
             escreverCodigo("\tadd dword[ESP], eax");
-        }else if(token.getClasse() == Classe.operadorSubtracao) {
+        } else if (token.getClasse() == Classe.operadorSubtracao) {
             token = lexico.nextToken();
             termo();
             mais_expressao();
-            //{A38}
             escreverCodigo("\tpop eax");
             escreverCodigo("\tsub dword[ESP], eax");
         }
@@ -1084,22 +1083,20 @@ public class Sintatico {
     // <mais_termo> ::= * <fator> <mais_termo> {A39} | / <fator> <mais_termo> {A40}
     // | ε
     private void mais_termo() {
-        if (token.getClasse() == Classe.operadorMultiplicacao){
+        if (token.getClasse() == Classe.operadorMultiplicacao) {
             token = lexico.nextToken();
             fator();
             mais_termo();
-            //{A39}
             escreverCodigo("\tpop eax");
-            escreverCodigo("\timul eax, dword[ESP]");
-            escreverCodigo("\tmov dword [ESP], eax");
-        } else if(token.getClasse() == Classe.operadorDivisao) {
+            escreverCodigo("\timul dword[ESP], eax");
+            escreverCodigo("\tmov dword[ESP], eax");
+        } else if (token.getClasse() == Classe.operadorDivisao) {
             token = lexico.nextToken();
             fator();
             mais_termo();
-            //{A40}
             escreverCodigo("\tpop ecx");
             escreverCodigo("\tpop eax");
-            escreverCodigo("\tidiv eax");
+            escreverCodigo("\tidiv ecx");
             escreverCodigo("\tpush eax");
         }
     }
@@ -1107,12 +1104,7 @@ public class Sintatico {
     // <fator> ::= <id> {A55} | <intnum> {A41} | ( <expressao> )
     private void fator() {
         if (token.getClasse() == Classe.identificador) {
-            token = lexico.nextToken();
             // {A55}
-            // Se a categoria do identificador id, reconhecido em fator, for variável ou
-            // parâmetro, então empilhar o valor armazenado no endereço de memória de id.
-            // Lembre-se, que o endereço de memória de id é calculado em função da base da
-            // pilha (EBP) e do deslocamento contido em display.
             String variavel = token.getValor().getValorTexto();
             if (!tabela.isPresent(variavel)) {
                 System.err.println("Variável " + variavel + " não foi declarada");
@@ -1126,6 +1118,7 @@ public class Sintatico {
             }
             escreverCodigo("\tpush dword[ebp - " + registro.getOffSet() + "]");
             token = lexico.nextToken();
+
         } else {
             if (token.getClasse() == Classe.numeroInteiro) {
                 // {A41}

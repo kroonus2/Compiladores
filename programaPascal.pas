@@ -18,7 +18,7 @@ begin
         {write(y);}
     end;
 
-   { x := 1;
+    {x := 1;
     repeat
         write(x);
         x := x + 1;
@@ -64,7 +64,5 @@ begin
         write(y);
     end;
 
-    x := 10;
-}
-
+    x := 10;}
 end.
