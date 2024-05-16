@@ -33,6 +33,8 @@ public class Sintatico {
 
     private Registro registro;
 
+    private String rotuloElse;
+
     public Sintatico(String nomeArquivo) {
         this.nomeArquivo = nomeArquivo;
         lexico = new Lexico(nomeArquivo);
@@ -603,12 +605,18 @@ public class Sintatico {
                     if (token.getClasse() == Classe.palavraReservada
                             && token.getValor().getValorTexto().equals("while")) {
                         token = lexico.nextToken();
-                        // {A10}
+                        // {A16}
+                        String rotuloWhile = criarRotulo("while");
+                        String rotuloFim = criarRotulo("FimWhile");
+                        rotulo = rotuloWhile;
                         if (token.getClasse() == Classe.parentesesEsquerdo) {
                             token = lexico.nextToken();
                             expressao_logica();
                             if (token.getClasse() == Classe.parentesesDireito) {
                                 token = lexico.nextToken();
+                                // {A17}
+                                escreverCodigo("\tcmp dword[esp], 0\n");
+                                escreverCodigo("\tje " + rotuloFim);
                                 if (token.getClasse() == Classe.palavraReservada
                                         && token.getValor().getValorTexto().equals("do")) {
                                     token = lexico.nextToken();
@@ -619,6 +627,9 @@ public class Sintatico {
                                         if (token.getClasse() == Classe.palavraReservada
                                                 && token.getValor().getValorTexto().equals("end")) {
                                             token = lexico.nextToken();
+                                            // {A18}
+                                            escreverCodigo("\tjmp " + rotuloWhile);
+                                            rotulo = rotuloFim;
                                         } else {
                                             System.err.println(token.getLinha() + "," + token.getColuna()
                                                     + " Erro: era esperada a palavra reservada end");
@@ -649,6 +660,12 @@ public class Sintatico {
                                 expressao_logica();
                                 if (token.getClasse() == Classe.parentesesDireito) {
                                     token = lexico.nextToken();
+                                    // {A19}
+                                    rotuloElse = criarRotulo("Else");
+                                    String rotuloFim = criarRotulo("FimIf");
+                                    escreverCodigo("\tcmp dword[esp], 0 \n");
+                                    escreverCodigo("\tje " + rotuloElse);
+
                                     if (token.getClasse() == Classe.palavraReservada
                                             && token.getValor().getValorTexto().equals("then")) {
                                         token = lexico.nextToken();
@@ -659,8 +676,11 @@ public class Sintatico {
                                             if (token.getClasse() == Classe.palavraReservada
                                                     && token.getValor().getValorTexto().equals("end")) {
                                                 token = lexico.nextToken();
+                                                // {A20}
+                                                escreverCodigo("\tjmp " + rotuloFim);
                                                 pfalsa();
-                                                // {A12}
+                                                // {A21}
+                                                rotulo = rotuloFim;
                                                 if (token.getClasse() == Classe.palavraReservada
                                                         && token.getValor().getValorTexto().equals("else")) {
                                                     token = lexico.nextToken();
@@ -707,11 +727,25 @@ public class Sintatico {
                             }
                         } else {
                             if (token.getClasse() == Classe.identificador) {
+                                // {A49}
+                                String variavel = token.getValor().getValorTexto();
+                                if (!tabela.isPresent(variavel)) {
+                                    System.err.println("Variável " + variavel + " não foi declarada");
+                                    System.exit(-1);
+                                } else {
+                                    registro = tabela.get(variavel);
+                                    if (registro.getCategoria() != Categoria.VARIAVEL) {
+                                        System.err.println("O identificador " + variavel + "não é uma variável. A49");
+                                        System.exit(-1);
+                                    }
+                                }
                                 token = lexico.nextToken();
-                                // {A13}
                                 if (token.getClasse() == Classe.atribuicao) {
                                     token = lexico.nextToken();
                                     expressao();
+                                    // {A22}
+                                    escreverCodigo("\tpop eax");
+                                    escreverCodigo("\tmov dword[esp - " + registro.getOffSet() + "], eax");
                                 } else {
                                     System.err.println(token.getLinha() + "," + token.getColuna()
                                             + " Erro: era esperado um sinal de atribuição");
@@ -729,6 +763,8 @@ public class Sintatico {
         if (token.getClasse() == Classe.palavraReservada
                 && token.getValor().getValorTexto().equals("else")) {
             token = lexico.nextToken();
+            //{A25}
+            rotulo = rotuloElse;
             if (token.getClasse() == Classe.palavraReservada
                     && token.getValor().getValorTexto().equals("begin")) {
                 token = lexico.nextToken();
