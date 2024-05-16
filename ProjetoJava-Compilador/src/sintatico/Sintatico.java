@@ -32,7 +32,6 @@ public class Sintatico {
     private List<String> sectionData = new ArrayList<String>();
 
     private Registro registro;
-
     private String rotuloElse;
 
     public Sintatico(String nomeArquivo) {
@@ -606,9 +605,10 @@ public class Sintatico {
                             && token.getValor().getValorTexto().equals("while")) {
                         token = lexico.nextToken();
                         // {A16}
-                        String rotuloWhile = criarRotulo("while");
+                        String rotuloWhile = criarRotulo("While");
                         String rotuloFim = criarRotulo("FimWhile");
                         rotulo = rotuloWhile;
+
                         if (token.getClasse() == Classe.parentesesEsquerdo) {
                             token = lexico.nextToken();
                             expressao_logica();
@@ -660,10 +660,10 @@ public class Sintatico {
                                 expressao_logica();
                                 if (token.getClasse() == Classe.parentesesDireito) {
                                     token = lexico.nextToken();
-                                    // {A19}
+                                    // A{19}
                                     rotuloElse = criarRotulo("Else");
                                     String rotuloFim = criarRotulo("FimIf");
-                                    escreverCodigo("\tcmp dword[esp], 0 \n");
+                                    escreverCodigo("\tcmp dword[esp], 0\n");
                                     escreverCodigo("\tje " + rotuloElse);
 
                                     if (token.getClasse() == Classe.palavraReservada
@@ -728,6 +728,12 @@ public class Sintatico {
                         } else {
                             if (token.getClasse() == Classe.identificador) {
                                 // {A49}
+                                // Verificar se o identificador id está na tabela de símbolos corrente ou nas
+                                // apontadas por tabelaPai. Caso não esteja, emitir mensagem apropriada dizendo
+                                // que o mesmo ainda não foi declarado.
+                                // Caso contrário, verificar se sua categoria é variável, parâmetro ou é a
+                                // função corrente. Caso não seja, emitir mensagem indicando que o identificador
+                                // não é uma variável.
                                 String variavel = token.getValor().getValorTexto();
                                 if (!tabela.isPresent(variavel)) {
                                     System.err.println("Variável " + variavel + " não foi declarada");
@@ -745,7 +751,8 @@ public class Sintatico {
                                     expressao();
                                     // {A22}
                                     escreverCodigo("\tpop eax");
-                                    escreverCodigo("\tmov dword[esp - " + registro.getOffSet() + "], eax");
+                                    escreverCodigo("\tmov dword[ebp - " + registro.getOffSet() + "], eax");
+
                                 } else {
                                     System.err.println(token.getLinha() + "," + token.getColuna()
                                             + " Erro: era esperado um sinal de atribuição");
@@ -760,11 +767,11 @@ public class Sintatico {
 
     // <pfalsa> ::= else {A25} begin <sentencas> end | ε
     private void pfalsa() {
+        escreverCodigo(rotuloElse +":");
         if (token.getClasse() == Classe.palavraReservada
                 && token.getValor().getValorTexto().equals("else")) {
             token = lexico.nextToken();
-            //{A25}
-            rotulo = rotuloElse;
+            // {A25}
             if (token.getClasse() == Classe.palavraReservada
                     && token.getValor().getValorTexto().equals("begin")) {
                 token = lexico.nextToken();
